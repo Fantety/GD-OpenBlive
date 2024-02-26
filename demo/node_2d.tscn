@@ -1,0 +1,21 @@
+[gd_scene load_steps=5 format=3 uid="uid://cw0clad44kwpy"]
+
+[ext_resource type="Script" path="res://demo/node_2d.gd" id="1_3cbnq"]
+[ext_resource type="Script" path="res://addons/gd-openblive/gd-blive.gd" id="2_cyl8d"]
+[ext_resource type="Script" path="res://addons/gd-openblive/api_client.gd" id="2_ojoa5"]
+[ext_resource type="Script" path="res://addons/gd-openblive/wss_client.gd" id="3_0uqa6"]
+
+[node name="Node2D" type="Node2D"]
+script = ExtResource("1_3cbnq")
+
+[node name="BLive" type="Node" parent="."]
+script = ExtResource("2_cyl8d")
+identity_code = "BJQZEPQ00X6O9"
+
+[node name="WssClient" type="Node" parent="BLive"]
+script = ExtResource("3_0uqa6")
+
+[node name="ApiClient" type="HTTPRequest" parent="BLive"]
+script = ExtResource("2_ojoa5")
+access_key_secret = "BkGRnftydqPZAQ7mM9oJmvPRF7fE1i"
+access_key_id = "KUv6BDNJCV4JYttpXCs3Lc8i"
