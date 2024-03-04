@@ -1,20 +1,29 @@
 extends Node
 
+## 用于保持和直播间长连的websocket节点，主要用于接收直播间消息
+## 必须作为BLive节点的子节点使用
 
+class_name WssClient
+
+## 当收到弹幕消息后会发送此信号
 signal danmaku_received(data)
+## 当收到礼物后会发送此信号
 signal gift_received(data)
+## 当收到superchat后会发送此信号
 signal superchat_added(data)
+## 当收到superchat被移除后发送此信号
 signal superchat_removed(data)
+## 当收到上舰消息后会发送此信号
 signal guard_hired(data)
+## 当收到点赞后会发送此信号
 signal like(data)
 
 class Proto:
 	var operation:int
 	var body:PackedByteArray
 	
-
-var sended = false
-var is_start = false
+var _sended = false
+var _is_start = false
 
 enum Version {
 		PLAIN = 0,
@@ -28,43 +37,44 @@ enum Operation{
 	OP_AUTH=7,#客户端发送的鉴权包(客户端发送的第一个包)
 	OP_AUTH_REPLY=8,#服务器收到鉴权包后的回复
 }
-signal ws_connected()
+signal _ws_connected()
 
-var ws_client = WebSocketPeer.new()
+var _ws_client = WebSocketPeer.new()
 
 func _ready():
+	#保留
 	pass
 
-func connect_to_ws(ws_url):
-	ws_client.connect_to_url(ws_url)
-	is_start = true
+func _connect_to_ws(ws_url):
+	_ws_client.connect_to_url(ws_url)
+	_is_start = true
 	pass
 	
 	
 func _process(delta):
-	if is_start == true:
-		ws_client.poll()
-		var state = ws_client.get_ready_state()
-		if state == WebSocketPeer.STATE_OPEN:
-			if sended == false:
-				emit_signal("ws_connected")
-				sended = true
-			while ws_client.get_available_packet_count():
-				var ws_pack = ws_client.get_packet()
-				print("数据包：", ws_pack)
-				on_ws_data_received(ws_pack)
-		elif state == WebSocketPeer.STATE_CLOSING:
+	if _is_start == true:
+		_ws_client.poll()
+		var _state = _ws_client.get_ready_state()
+		if _state == WebSocketPeer.STATE_OPEN:
+			if _sended == false:
+				emit_signal("_ws_connected")
+				_sended = true
+			while _ws_client.get_available_packet_count():
+				var _ws_pack = _ws_client.get_packet()
+				print("数据包：", _ws_pack)
+				_on_ws_data_received(_ws_pack)
+		elif _state == WebSocketPeer.STATE_CLOSING:
 			# 继续轮询才能正确关闭。
 			pass
-		elif state == WebSocketPeer.STATE_CLOSED:
-			sended == false
-			var code = ws_client.get_close_code()
-			var reason = ws_client.get_close_reason()
+		elif _state == WebSocketPeer.STATE_CLOSED:
+			_sended == false
+			var code = _ws_client.get_close_code()
+			var reason = _ws_client.get_close_reason()
 			print("WebSocket 已关闭，代码：%d，原因 %s。干净得体：%s" % [code, reason, code != -1])
 			set_process(false) # 停止处理。
 
 
-func pack(body:PackedByteArray,operation:int) -> void:
+func _pack(body:PackedByteArray,operation:int) -> void:
 		var buffer := StreamPeerBuffer.new()
 		buffer.big_endian = true
 		buffer.put_32(16 + body.size())
@@ -73,18 +83,18 @@ func pack(body:PackedByteArray,operation:int) -> void:
 		buffer.put_32(operation)
 		buffer.put_32(0)
 		buffer.put_data(body)
-		ws_client.put_packet(buffer.data_array)
+		_ws_client.put_packet(buffer.data_array)
 		
 		
-func unpack(data: PackedByteArray) -> Array: # [Proto]
+func _unpack(data: PackedByteArray) -> Array: # [Proto]
 		var buffer := StreamPeerBuffer.new()
 		buffer.big_endian = true
 		buffer.data_array = data
 		var result := []
-		_unpack(buffer, result)
+		__unpack(buffer, result)
 		return result
 		
-func _unpack(buffer: StreamPeerBuffer, protos: Array) -> int:
+func __unpack(buffer: StreamPeerBuffer, protos: Array) -> int:
 		var packet_length := buffer.get_32()
 		var header_length := buffer.get_16()
 		if header_length != 16:
@@ -113,7 +123,7 @@ func _unpack(buffer: StreamPeerBuffer, protos: Array) -> int:
 				var uncompressed := StreamPeerBuffer.new()
 				uncompressed.big_endian = true
 				uncompressed.data_array = raw[1].decompress_dynamic(-1, FileAccess.COMPRESSION_GZIP)
-				var err := _unpack(uncompressed, protos)
+				var err := __unpack(uncompressed, protos)
 				if err:
 					return err
 			_:
@@ -121,8 +131,8 @@ func _unpack(buffer: StreamPeerBuffer, protos: Array) -> int:
 				return FAILED
 		return OK
 
-func on_ws_data_received(pack) -> void:
-	for entry in unpack(pack):
+func _on_ws_data_received(pack) -> void:
+	for entry in _unpack(pack):
 		match entry.operation:
 			Operation.OP_HEARTBEAT_REPLY:
 				# 可以获取当前人气值
@@ -142,7 +152,7 @@ func on_ws_data_received(pack) -> void:
 					"LIVE_OPEN_PLATFORM_DM":
 						#print("danmaku_received")
 						emit_signal("danmaku_received", body.data)
-						#print(body.data)
+						print(body.data)
 					
 					"LIVE_OPEN_PLATFORM_SEND_GIFT":
 						#print("gift_received")
@@ -165,7 +175,7 @@ func on_ws_data_received(pack) -> void:
 				push_warning("Unknown operation: %d" % (entry.operation))
 
 
-func make_heartbeat():
+func _make_heartbeat():
 	print("make_heartbeat")
-	pack(PackedByteArray(),Operation.OP_HEARTBEAT)
+	_pack(PackedByteArray(),Operation.OP_HEARTBEAT)
 	pass
